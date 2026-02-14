@@ -3,121 +3,110 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Lager-Scanner V2</title>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/quagga/0.12.1/quagga.min.js"></script>
+    <title>Lager-Scanner V3 (Native)</title>
     <style>
-        body { font-family: sans-serif; margin: 0; padding: 15px; background: #f0f2f5; }
-        .container { max-width: 500px; margin: auto; background: white; padding: 20px; border-radius: 12px; }
-        #scanner-container { width: 100%; height: 300px; display: none; border: 3px solid #1a73e8; position: relative; overflow: hidden; background: black; }
-        #scanner-container video { width: 100%; height: 100%; object-fit: cover; }
-        canvas.drawingBuffer { position: absolute; top: 0; left: 0; width: 100%; height: 100%; }
-        input { width: 100%; padding: 12px; margin: 10px 0; border: 1px solid #ccc; border-radius: 8px; font-size: 16px; }
-        button { width: 100%; padding: 15px; border-radius: 8px; font-weight: bold; cursor: pointer; border: none; }
-        .btn-scan { background: #1a73e8; color: white; margin-bottom: 20px; }
-        .btn-stop { background: #ea4335; color: white; display: none; margin-bottom: 10px; }
-        .btn-save { background: #34a853; color: white; font-size: 1.1em; }
-        .history { margin-top: 20px; font-size: 0.9em; border-top: 1px solid #ddd; padding-top: 10px; }
+        body { font-family: sans-serif; margin: 0; padding: 15px; background: #f0f2f5; text-align: center; }
+        .container { max-width: 500px; margin: auto; background: white; padding: 20px; border-radius: 12px; box-shadow: 0 4px 10px rgba(0,0,0,0.1); }
+        video { width: 100%; border-radius: 8px; background: black; display: none; }
+        input { width: 100%; padding: 12px; margin: 10px 0; border: 1px solid #ccc; border-radius: 8px; font-size: 16px; box-sizing: border-box; }
+        button { width: 100%; padding: 15px; border-radius: 8px; font-weight: bold; cursor: pointer; border: none; margin-top: 5px; }
+        .btn-scan { background: #1a73e8; color: white; margin-bottom: 15px; }
+        .btn-save { background: #34a853; color: white; margin-top: 20px; }
+        .btn-stop { background: #ea4335; color: white; display: none; }
+        .history { margin-top: 20px; text-align: left; font-size: 0.85em; border-top: 1px solid #ddd; padding-top: 10px; }
     </style>
 </head>
 <body>
 
 <div class="container">
-    <h2>Scanner V2</h2>
+    <h2>Scanner V3</h2>
     
-    <div id="scanner-container"></div>
-    <button id="stop-btn" class="btn-stop" onclick="stopScanner()">Abbrechen</button>
+    <video id="video" playsinline></video>
+    <button id="stop-btn" class="btn-stop" onclick="stopScanner()">Stop</button>
 
-    <label>Stellplatz</label>
-    <input type="text" id="stellplatz" placeholder="Wird gescannt...">
-    <button class="btn-scan" onclick="startScanner('stellplatz')">📷 Platz scannen</button>
+    <label><b>1. Stellplatz</b></label>
+    <input type="text" id="stellplatz" placeholder="Hier erscheint der Scan...">
+    <button class="btn-scan" onclick="startScanning('stellplatz')">📷 Platz scannen</button>
 
-    <label>Produkt</label>
-    <input type="text" id="produkt" placeholder="Wird gescannt...">
-    <button class="btn-scan" onclick="startScanner('produkt')">📷 Produkt scannen</button>
+    <label><b>2. Produkt</b></label>
+    <input type="text" id="produkt" placeholder="Hier erscheint der Scan...">
+    <button class="btn-scan" onclick="startScanning('produkt')">📷 Produkt scannen</button>
 
-    <label>Artikelnummer (Manuell)</label>
-    <input type="text" id="artikelnr" placeholder="Nummer tippen...">
+    <label><b>3. Artikelnummer</b></label>
+    <input type="text" id="artikelnr" placeholder="Manuell eingeben...">
 
     <button class="btn-save" onclick="saveData()">Speichern</button>
 
-    <div class="history" id="history"><b>Letzte Einträge:</b></div>
+    <div class="history" id="history"><b>Letzte Scans:</b></div>
 </div>
 
 <script>
     let activeField = null;
+    let stream = null;
+    let intervalId = null;
 
-    function startScanner(targetId) {
+    async function startScanning(targetId) {
         activeField = targetId;
-        document.getElementById('scanner-container').style.display = 'block';
-        document.getElementById('stop-btn').style.display = 'block';
+        const video = document.getElementById('video');
+        const stopBtn = document.getElementById('stop-btn');
 
-        Quagga.init({
-            inputStream: {
-                name: "Live",
-                type: "LiveStream",
-                target: document.querySelector('#scanner-container'),
-                constraints: {
-                    facingMode: "environment",
-                    width: { min: 640 },
-                    height: { min: 480 },
-                    aspectRatio: { min: 1, max: 2 }
-                }
-            },
-            locator: { patchSize: "medium", halfSample: true },
-            decoder: {
-                // Hier habe ich fast alle gängigen Typen aktiviert:
-                readers: ["code_128_reader", "ean_reader", "ean_8_reader", "code_39_reader", "code_39_vin_reader", "codabar_reader", "upc_reader", "upc_e_reader", "i2of5_reader"]
+        try {
+            stream = await navigator.mediaDevices.getUserMedia({ 
+                video: { facingMode: "environment", focusMode: "continuous" } 
+            });
+            video.srcObject = stream;
+            video.style.display = 'block';
+            stopBtn.style.display = 'block';
+            video.play();
+
+            // Check if BarcodeDetector is supported
+            if (!('BarcodeDetector' in window)) {
+                alert("Dein Browser unterstützt das native Scannen leider nicht. Bitte nutze Chrome auf Android!");
+                return;
             }
-        }, function(err) {
-            if (err) { alert("Fehler: " + err); return; }
-            Quagga.start();
-        });
 
-        // Zeichnet ein grünes/rotes Feld, wenn er etwas "sieht"
-        Quagga.onProcessed(function(result) {
-            var drawingCtx = Quagga.canvas.ctx.drawing,
-                drawingCanvas = Quagga.canvas.dom.canvas;
-            if (result) {
-                if (result.boxes) {
-                    drawingCtx.clearRect(0, 0, parseInt(drawingCanvas.getAttribute("width")), parseInt(drawingCanvas.getAttribute("height")));
-                    result.boxes.filter(function (box) { return box !== result.box; }).forEach(function (box) {
-                        Quagga.ImageDebug.drawPath(box, {x: 0, y: 1}, drawingCtx, {color: "green", lineWidth: 2});
-                    });
-                }
-            }
-        });
+            const detector = new BarcodeDetector();
 
-        Quagga.onDetected(function(data) {
-            document.getElementById(activeField).value = data.codeResult.code;
-            // Bestätigungs-Ton (optional)
-            vibrateMobile();
-            stopScanner();
-        });
+            intervalId = setInterval(async () => {
+                try {
+                    const barcodes = await detector.detect(video);
+                    if (barcodes.length > 0) {
+                        document.getElementById(activeField).value = barcodes[0].rawValue;
+                        if (navigator.vibrate) navigator.vibrate(100);
+                        stopScanner();
+                    }
+                } catch (e) { /* Detecting... */ }
+            }, 500);
+
+        } catch (err) {
+            alert("Kamerafehler: " + err);
+        }
     }
 
     function stopScanner() {
-        Quagga.stop();
-        document.getElementById('scanner-container').style.display = 'none';
+        if (stream) {
+            stream.getTracks().forEach(track => track.stop());
+        }
+        if (intervalId) clearInterval(intervalId);
+        document.getElementById('video').style.display = 'none';
         document.getElementById('stop-btn').style.display = 'none';
-    }
-
-    function vibrateMobile() {
-        if (navigator.vibrate) navigator.vibrate(100);
     }
 
     function saveData() {
         const p = document.getElementById('stellplatz').value;
         const pr = document.getElementById('produkt').value;
         const nr = document.getElementById('artikelnr').value;
+        if(!p || !pr) { alert("Bitte erst scannen!"); return; }
+
         const entry = document.createElement('div');
-        entry.style.padding = "5px";
-        entry.style.borderBottom = "1px solid #eee";
-        entry.innerHTML = `Platz: ${p} | Prod: ${pr} | Nr: ${nr}`;
+        entry.innerHTML = `• <b>${p}</b> | ${pr} (Nr: ${nr})`;
         document.getElementById('history').prepend(entry);
-        // Reset Produkt & Nr
+
+        // Reset
         document.getElementById('produkt').value = "";
         document.getElementById('artikelnr').value = "";
     }
 </script>
+
 </body>
 </html>
