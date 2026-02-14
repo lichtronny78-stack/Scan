@@ -3,53 +3,50 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Lager-Scanner Pro CSV</title>
+    <title>Lager-Scanner Pro V4</title>
     <style>
-        body { font-family: sans-serif; margin: 0; padding: 15px; background: #f0f2f5; }
-        .container { max-width: 500px; margin: auto; background: white; padding: 20px; border-radius: 12px; box-shadow: 0 4px 10px rgba(0,0,0,0.1); }
-        video { width: 100%; border-radius: 8px; background: black; display: none; margin-bottom: 10px; }
-        input { width: 100%; padding: 12px; margin: 10px 0; border: 1px solid #ccc; border-radius: 8px; font-size: 16px; box-sizing: border-box; }
-        button { width: 100%; padding: 15px; border-radius: 8px; font-weight: bold; cursor: pointer; border: none; margin-top: 5px; }
-        .btn-scan { background: #1a73e8; color: white; }
-        .btn-save { background: #34a853; color: white; margin-top: 15px; font-size: 1.1em; }
-        .btn-csv { background: #f4b400; color: white; margin-top: 20px; }
-        .btn-clear { background: #70757a; color: white; margin-top: 10px; font-size: 0.8em; padding: 10px; }
-        .btn-stop { background: #ea4335; color: white; display: none; }
-        .history { margin-top: 20px; text-align: left; font-size: 0.85em; border-top: 1px solid #ddd; padding-top: 10px; max-height: 200px; overflow-y: auto; }
-        .entry { border-bottom: 1px solid #eee; padding: 5px 0; }
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; margin: 0; padding: 15px; background: #f0f2f5; color: #333; }
+        .container { max-width: 500px; margin: auto; background: white; padding: 20px; border-radius: 15px; box-shadow: 0 4px 12px rgba(0,0,0,0.15); }
+        h2 { text-align: center; color: #1a73e8; margin-top: 0; }
+        video { width: 100%; border-radius: 10px; background: black; display: none; margin-bottom: 10px; border: 2px solid #1a73e8; }
+        label { display: block; font-weight: bold; margin-bottom: 5px; font-size: 0.9em; color: #555; }
+        input { width: 100%; padding: 12px; margin-bottom: 10px; border: 1px solid #ccc; border-radius: 8px; font-size: 16px; box-sizing: border-box; }
+        button { width: 100%; padding: 14px; border-radius: 8px; font-weight: bold; cursor: pointer; border: none; transition: opacity 0.2s; }
+        .btn-scan { background: #1a73e8; color: white; margin-bottom: 15px; }
+        .btn-save { background: #34a853; color: white; margin-top: 10px; font-size: 1.1em; }
+        .btn-csv { background: #f4b400; color: white; margin-top: 25px; }
+        .btn-clear { background: #70757a; color: white; margin-top: 10px; font-size: 0.8em; padding: 8px; }
+        .btn-stop { background: #ea4335; color: white; display: none; margin-bottom: 10px; }
+        .history { margin-top: 20px; text-align: left; font-size: 0.85em; border-top: 2px solid #eee; padding-top: 15px; max-height: 250px; overflow-y: auto; }
+        .entry { border-bottom: 1px solid #eee; padding: 8px 0; line-height: 1.4; }
+        b { color: #1a73e8; }
     </style>
 </head>
 <body>
 
 <div class="container">
-    <h2 style="text-align:center; color:#1a73e8;">Lager-Log</h2>
+    <h2>Lager-Logistik</h2>
     
     <video id="video" playsinline></video>
     <button id="stop-btn" class="btn-stop" onclick="stopScanner()">Abbrechen</button>
 
-    <label><b>1. Stellplatz</b></label>
-    <input type="text" id="stellplatz" placeholder="Scan 1...">
+    <label>1. Stellplatz scannen</label>
+    <input type="text" id="stellplatz" placeholder="Scan startet...">
     <button class="btn-scan" onclick="startScanning('stellplatz')">📷 Platz scannen</button>
 
-    <div style="margin-top:15px;"></div>
-
-    <label><b>2. Produkt</b></label>
-    <input type="text" id="produkt" placeholder="Scan 2...">
+    <label>2. Produkt scannen</label>
+    <input type="text" id="produkt" placeholder="Scan startet...">
     <button class="btn-scan" onclick="startScanning('produkt')">📷 Produkt scannen</button>
 
-    <div style="margin-top:15px;"></div>
-
-    <label><b>3. Artikelnummer</b></label>
-    <input type="text" id="artikelnr" placeholder="Manuell eingeben...">
+    <label>3. Artikelnummer</label>
+    <input type="text" id="artikelnr" placeholder="Manuelle Eingabe...">
 
     <button class="btn-save" onclick="saveData()">Eintrag Speichern</button>
     
-    <hr>
-    
-    <button class="btn-csv" onclick="downloadCSV()">📊 Als CSV herunterladen</button>
-    <button class="btn-clear" onclick="clearData()">Liste leeren</button>
+    <button class="btn-csv" onclick="downloadCSV()">📊 CSV Export (Excel)</button>
+    <button class="btn-clear" onclick="clearData()">Gesamte Liste löschen</button>
 
-    <div class="history" id="history"><b>Gespeicherte Scans:</b><br></div>
+    <div class="history" id="history"><b>Verlauf (Sekundengenau):</b></div>
 </div>
 
 <script>
@@ -58,7 +55,6 @@
     let intervalId = null;
     let savedEntries = JSON.parse(localStorage.getItem('scans')) || [];
 
-    // Beim Start die alten Daten laden
     window.onload = updateHistoryDisplay;
 
     async function startScanning(targetId) {
@@ -89,7 +85,7 @@
             }, 500);
 
         } catch (err) {
-            alert("Kamera-Fehler: " + err);
+            alert("Kamera-Fehler: Bitte Chrome/Safari nutzen und HTTPS erlauben.");
         }
     }
 
@@ -103,12 +99,16 @@
     function saveData() {
         const p = document.getElementById('stellplatz').value;
         const pr = document.getElementById('produkt').value;
-        const nr = document.getElementById('artikelnr').value;
+        const nr = document.getElementById('artikelnr').value.replace(/;/g, ','); // Semikolon-Schutz
 
-        if(!p || !pr) { alert("Platz und Produkt müssen ausgefüllt sein!"); return; }
+        if(!p || !pr) { alert("Bitte Stellplatz und Produkt scannen!"); return; }
+
+        const jetzt = new Date();
+        // Zeitstempel inkl. Sekunden: TT.MM.JJJJ, HH:MM:SS
+        const zeitStempel = jetzt.toLocaleString('de-DE');
 
         const entry = {
-            zeit: new Date().toLocaleString(),
+            zeit: zeitStempel,
             platz: p,
             produkt: pr,
             artnr: nr
@@ -119,18 +119,19 @@
         
         updateHistoryDisplay();
         
-        // Felder leeren für den nächsten Scan (Stellplatz bleibt oft gleich?)
+        // Felder leeren für den nächsten Durchgang
+        document.getElementById('stellplatz').value = "";
         document.getElementById('produkt').value = "";
         document.getElementById('artikelnr').value = "";
     }
 
     function updateHistoryDisplay() {
         const historyDiv = document.getElementById('history');
-        historyDiv.innerHTML = "<b>Gespeicherte Scans:</b><br>";
+        historyDiv.innerHTML = "<b>Verlauf (Sekundengenau):</b><br>";
         savedEntries.slice().reverse().forEach(e => {
             const div = document.createElement('div');
             div.className = 'entry';
-            div.innerHTML = `[${e.zeit}] <b>${e.platz}</b>: ${e.produkt} (${e.artnr})`;
+            div.innerHTML = `<small>${e.zeit}</small><br><b>Platz:</b> ${e.platz} | <b>Prod:</b> ${e.produkt} | <b>Nr:</b> ${e.artnr}`;
             historyDiv.appendChild(div);
         });
     }
@@ -138,21 +139,28 @@
     function downloadCSV() {
         if(savedEntries.length === 0) { alert("Keine Daten zum Exportieren!"); return; }
         
-        let csvContent = "data:text/csv;charset=utf-8,Zeit,Stellplatz,Produkt,Artikelnummer\n";
+        let csvContent = "Zeitpunkt;Stellplatz;Produkt;Artikelnummer\n";
+        
         savedEntries.forEach(e => {
-            csvContent += `${e.zeit},${e.platz},${e.produkt},${e.artnr}\n`;
+            csvContent += `${e.zeit};${e.platz};${e.produkt};${e.artnr}\n`;
         });
 
-        const encodedUri = encodeURI(csvContent);
+        const BOM = "\uFEFF"; // Excel UTF-8 Fix
+        const blob = new Blob([BOM + csvContent], { type: "text/csv;charset=utf-8;" });
+        const url = URL.createObjectURL(blob);
+        
         const link = document.createElement("a");
-        link.setAttribute("href", encodedUri);
+        link.setAttribute("href", url);
         link.setAttribute("download", `Lager_Export_${new Date().toLocaleDateString()}.csv`);
         document.body.appendChild(link);
         link.click();
+        
+        document.body.removeChild(link);
+        URL.revokeObjectURL(url);
     }
 
     function clearData() {
-        if(confirm("Alle Scans wirklich löschen?")) {
+        if(confirm("Alle gespeicherten Scans wirklich löschen?")) {
             savedEntries = [];
             localStorage.removeItem('scans');
             updateHistoryDisplay();
