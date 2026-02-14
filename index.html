@@ -3,47 +3,63 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Lager-Scanner V3 (Native)</title>
+    <title>Lager-Scanner Pro CSV</title>
     <style>
-        body { font-family: sans-serif; margin: 0; padding: 15px; background: #f0f2f5; text-align: center; }
+        body { font-family: sans-serif; margin: 0; padding: 15px; background: #f0f2f5; }
         .container { max-width: 500px; margin: auto; background: white; padding: 20px; border-radius: 12px; box-shadow: 0 4px 10px rgba(0,0,0,0.1); }
-        video { width: 100%; border-radius: 8px; background: black; display: none; }
+        video { width: 100%; border-radius: 8px; background: black; display: none; margin-bottom: 10px; }
         input { width: 100%; padding: 12px; margin: 10px 0; border: 1px solid #ccc; border-radius: 8px; font-size: 16px; box-sizing: border-box; }
         button { width: 100%; padding: 15px; border-radius: 8px; font-weight: bold; cursor: pointer; border: none; margin-top: 5px; }
-        .btn-scan { background: #1a73e8; color: white; margin-bottom: 15px; }
-        .btn-save { background: #34a853; color: white; margin-top: 20px; }
+        .btn-scan { background: #1a73e8; color: white; }
+        .btn-save { background: #34a853; color: white; margin-top: 15px; font-size: 1.1em; }
+        .btn-csv { background: #f4b400; color: white; margin-top: 20px; }
+        .btn-clear { background: #70757a; color: white; margin-top: 10px; font-size: 0.8em; padding: 10px; }
         .btn-stop { background: #ea4335; color: white; display: none; }
-        .history { margin-top: 20px; text-align: left; font-size: 0.85em; border-top: 1px solid #ddd; padding-top: 10px; }
+        .history { margin-top: 20px; text-align: left; font-size: 0.85em; border-top: 1px solid #ddd; padding-top: 10px; max-height: 200px; overflow-y: auto; }
+        .entry { border-bottom: 1px solid #eee; padding: 5px 0; }
     </style>
 </head>
 <body>
 
 <div class="container">
-    <h2>Scanner V3</h2>
+    <h2 style="text-align:center; color:#1a73e8;">Lager-Log</h2>
     
     <video id="video" playsinline></video>
-    <button id="stop-btn" class="btn-stop" onclick="stopScanner()">Stop</button>
+    <button id="stop-btn" class="btn-stop" onclick="stopScanner()">Abbrechen</button>
 
     <label><b>1. Stellplatz</b></label>
-    <input type="text" id="stellplatz" placeholder="Hier erscheint der Scan...">
+    <input type="text" id="stellplatz" placeholder="Scan 1...">
     <button class="btn-scan" onclick="startScanning('stellplatz')">📷 Platz scannen</button>
 
+    <div style="margin-top:15px;"></div>
+
     <label><b>2. Produkt</b></label>
-    <input type="text" id="produkt" placeholder="Hier erscheint der Scan...">
+    <input type="text" id="produkt" placeholder="Scan 2...">
     <button class="btn-scan" onclick="startScanning('produkt')">📷 Produkt scannen</button>
+
+    <div style="margin-top:15px;"></div>
 
     <label><b>3. Artikelnummer</b></label>
     <input type="text" id="artikelnr" placeholder="Manuell eingeben...">
 
-    <button class="btn-save" onclick="saveData()">Speichern</button>
+    <button class="btn-save" onclick="saveData()">Eintrag Speichern</button>
+    
+    <hr>
+    
+    <button class="btn-csv" onclick="downloadCSV()">📊 Als CSV herunterladen</button>
+    <button class="btn-clear" onclick="clearData()">Liste leeren</button>
 
-    <div class="history" id="history"><b>Letzte Scans:</b></div>
+    <div class="history" id="history"><b>Gespeicherte Scans:</b><br></div>
 </div>
 
 <script>
     let activeField = null;
     let stream = null;
     let intervalId = null;
+    let savedEntries = JSON.parse(localStorage.getItem('scans')) || [];
+
+    // Beim Start die alten Daten laden
+    window.onload = updateHistoryDisplay;
 
     async function startScanning(targetId) {
         activeField = targetId;
@@ -52,18 +68,12 @@
 
         try {
             stream = await navigator.mediaDevices.getUserMedia({ 
-                video: { facingMode: "environment", focusMode: "continuous" } 
+                video: { facingMode: "environment" } 
             });
             video.srcObject = stream;
             video.style.display = 'block';
             stopBtn.style.display = 'block';
             video.play();
-
-            // Check if BarcodeDetector is supported
-            if (!('BarcodeDetector' in window)) {
-                alert("Dein Browser unterstützt das native Scannen leider nicht. Bitte nutze Chrome auf Android!");
-                return;
-            }
 
             const detector = new BarcodeDetector();
 
@@ -75,18 +85,16 @@
                         if (navigator.vibrate) navigator.vibrate(100);
                         stopScanner();
                     }
-                } catch (e) { /* Detecting... */ }
+                } catch (e) {}
             }, 500);
 
         } catch (err) {
-            alert("Kamerafehler: " + err);
+            alert("Kamera-Fehler: " + err);
         }
     }
 
     function stopScanner() {
-        if (stream) {
-            stream.getTracks().forEach(track => track.stop());
-        }
+        if (stream) stream.getTracks().forEach(track => track.stop());
         if (intervalId) clearInterval(intervalId);
         document.getElementById('video').style.display = 'none';
         document.getElementById('stop-btn').style.display = 'none';
@@ -96,15 +104,59 @@
         const p = document.getElementById('stellplatz').value;
         const pr = document.getElementById('produkt').value;
         const nr = document.getElementById('artikelnr').value;
-        if(!p || !pr) { alert("Bitte erst scannen!"); return; }
 
-        const entry = document.createElement('div');
-        entry.innerHTML = `• <b>${p}</b> | ${pr} (Nr: ${nr})`;
-        document.getElementById('history').prepend(entry);
+        if(!p || !pr) { alert("Platz und Produkt müssen ausgefüllt sein!"); return; }
 
-        // Reset
+        const entry = {
+            zeit: new Date().toLocaleString(),
+            platz: p,
+            produkt: pr,
+            artnr: nr
+        };
+
+        savedEntries.push(entry);
+        localStorage.setItem('scans', JSON.stringify(savedEntries));
+        
+        updateHistoryDisplay();
+        
+        // Felder leeren für den nächsten Scan (Stellplatz bleibt oft gleich?)
         document.getElementById('produkt').value = "";
         document.getElementById('artikelnr').value = "";
+    }
+
+    function updateHistoryDisplay() {
+        const historyDiv = document.getElementById('history');
+        historyDiv.innerHTML = "<b>Gespeicherte Scans:</b><br>";
+        savedEntries.slice().reverse().forEach(e => {
+            const div = document.createElement('div');
+            div.className = 'entry';
+            div.innerHTML = `[${e.zeit}] <b>${e.platz}</b>: ${e.produkt} (${e.artnr})`;
+            historyDiv.appendChild(div);
+        });
+    }
+
+    function downloadCSV() {
+        if(savedEntries.length === 0) { alert("Keine Daten zum Exportieren!"); return; }
+        
+        let csvContent = "data:text/csv;charset=utf-8,Zeit,Stellplatz,Produkt,Artikelnummer\n";
+        savedEntries.forEach(e => {
+            csvContent += `${e.zeit},${e.platz},${e.produkt},${e.artnr}\n`;
+        });
+
+        const encodedUri = encodeURI(csvContent);
+        const link = document.createElement("a");
+        link.setAttribute("href", encodedUri);
+        link.setAttribute("download", `Lager_Export_${new Date().toLocaleDateString()}.csv`);
+        document.body.appendChild(link);
+        link.click();
+    }
+
+    function clearData() {
+        if(confirm("Alle Scans wirklich löschen?")) {
+            savedEntries = [];
+            localStorage.removeItem('scans');
+            updateHistoryDisplay();
+        }
     }
 </script>
 
