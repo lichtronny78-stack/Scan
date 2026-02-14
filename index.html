@@ -3,57 +3,44 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Lager-Scanner Pro</title>
+    <title>Lager-Scanner V2</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/quagga/0.12.1/quagga.min.js"></script>
     <style>
-        body { font-family: 'Segoe UI', sans-serif; margin: 0; padding: 20px; background: #f0f2f5; }
-        .container { max-width: 500px; margin: auto; background: white; padding: 20px; border-radius: 12px; shadow: 0 4px 6px rgba(0,0,0,0.1); }
-        h2 { text-align: center; color: #1a73e8; }
-        .input-group { margin-bottom: 15px; }
-        label { display: block; font-weight: bold; margin-bottom: 5px; color: #555; }
-        input { width: 100%; padding: 12px; border: 1px solid #ccc; border-radius: 8px; box-sizing: border-box; font-size: 16px; }
-        button { width: 100%; padding: 12px; margin-top: 5px; border: none; border-radius: 8px; cursor: pointer; font-weight: bold; font-size: 14px; transition: 0.3s; }
-        .btn-scan { background-color: #e8f0fe; color: #1a73e8; border: 1px solid #1a73e8; }
-        .btn-save { background-color: #34a853; color: white; margin-top: 20px; font-size: 18px; }
-        #scanner-container { width: 100%; height: 250px; display: none; border: 2px solid #1a73e8; margin-top: 10px; position: relative; overflow: hidden; }
-        #scanner-container video { width: 100%; height: auto; }
-        canvas.drawingBuffer { position: absolute; top: 0; left: 0; }
-        .history { margin-top: 30px; border-top: 1px solid #eee; padding-top: 10px; }
-        .entry { font-size: 0.8em; background: #fafafa; padding: 5px; border-bottom: 1px solid #ddd; }
+        body { font-family: sans-serif; margin: 0; padding: 15px; background: #f0f2f5; }
+        .container { max-width: 500px; margin: auto; background: white; padding: 20px; border-radius: 12px; }
+        #scanner-container { width: 100%; height: 300px; display: none; border: 3px solid #1a73e8; position: relative; overflow: hidden; background: black; }
+        #scanner-container video { width: 100%; height: 100%; object-fit: cover; }
+        canvas.drawingBuffer { position: absolute; top: 0; left: 0; width: 100%; height: 100%; }
+        input { width: 100%; padding: 12px; margin: 10px 0; border: 1px solid #ccc; border-radius: 8px; font-size: 16px; }
+        button { width: 100%; padding: 15px; border-radius: 8px; font-weight: bold; cursor: pointer; border: none; }
+        .btn-scan { background: #1a73e8; color: white; margin-bottom: 20px; }
+        .btn-stop { background: #ea4335; color: white; display: none; margin-bottom: 10px; }
+        .btn-save { background: #34a853; color: white; font-size: 1.1em; }
+        .history { margin-top: 20px; font-size: 0.9em; border-top: 1px solid #ddd; padding-top: 10px; }
     </style>
 </head>
 <body>
 
 <div class="container">
-    <h2>Lager-Scanner</h2>
-
+    <h2>Scanner V2</h2>
+    
     <div id="scanner-container"></div>
-    <button id="stop-btn" style="display:none; background:#ea4335; color:white;" onclick="stopScanner()">Abbrechen</button>
+    <button id="stop-btn" class="btn-stop" onclick="stopScanner()">Abbrechen</button>
 
-    <hr>
+    <label>Stellplatz</label>
+    <input type="text" id="stellplatz" placeholder="Wird gescannt...">
+    <button class="btn-scan" onclick="startScanner('stellplatz')">📷 Platz scannen</button>
 
-    <div class="input-group">
-        <label>Stellplatz (Scan 1)</label>
-        <input type="text" id="stellplatz" placeholder="Wird gescannt...">
-        <button class="btn-scan" onclick="startScanner('stellplatz')">📷 Stellplatz scannen</button>
-    </div>
+    <label>Produkt</label>
+    <input type="text" id="produkt" placeholder="Wird gescannt...">
+    <button class="btn-scan" onclick="startScanner('produkt')">📷 Produkt scannen</button>
 
-    <div class="input-group">
-        <label>Produkt (Scan 2)</label>
-        <input type="text" id="produkt" placeholder="Wird gescannt...">
-        <button class="btn-scan" onclick="startScanner('produkt')">📷 Produkt scannen</button>
-    </div>
+    <label>Artikelnummer (Manuell)</label>
+    <input type="text" id="artikelnr" placeholder="Nummer tippen...">
 
-    <div class="input-group">
-        <label>Artikelnummer (Manuell)</label>
-        <input type="text" id="artikelnr" placeholder="Nummer eingeben...">
-    </div>
+    <button class="btn-save" onclick="saveData()">Speichern</button>
 
-    <button class="btn-save" onclick="saveToHistory()">Eintrag Speichern</button>
-
-    <div class="history" id="history">
-        <strong>Letzte Scans:</strong>
-    </div>
+    <div class="history" id="history"><b>Letzte Einträge:</b></div>
 </div>
 
 <script>
@@ -69,21 +56,42 @@
                 name: "Live",
                 type: "LiveStream",
                 target: document.querySelector('#scanner-container'),
-                constraints: { facingMode: "environment" }
+                constraints: {
+                    facingMode: "environment",
+                    width: { min: 640 },
+                    height: { min: 480 },
+                    aspectRatio: { min: 1, max: 2 }
+                }
             },
+            locator: { patchSize: "medium", halfSample: true },
             decoder: {
-                readers: ["code_128_reader", "ean_reader", "ean_8_reader", "code_39_reader"]
+                // Hier habe ich fast alle gängigen Typen aktiviert:
+                readers: ["code_128_reader", "ean_reader", "ean_8_reader", "code_39_reader", "code_39_vin_reader", "codabar_reader", "upc_reader", "upc_e_reader", "i2of5_reader"]
             }
         }, function(err) {
-            if (err) { console.error(err); return; }
+            if (err) { alert("Fehler: " + err); return; }
             Quagga.start();
+        });
+
+        // Zeichnet ein grünes/rotes Feld, wenn er etwas "sieht"
+        Quagga.onProcessed(function(result) {
+            var drawingCtx = Quagga.canvas.ctx.drawing,
+                drawingCanvas = Quagga.canvas.dom.canvas;
+            if (result) {
+                if (result.boxes) {
+                    drawingCtx.clearRect(0, 0, parseInt(drawingCanvas.getAttribute("width")), parseInt(drawingCanvas.getAttribute("height")));
+                    result.boxes.filter(function (box) { return box !== result.box; }).forEach(function (box) {
+                        Quagga.ImageDebug.drawPath(box, {x: 0, y: 1}, drawingCtx, {color: "green", lineWidth: 2});
+                    });
+                }
+            }
         });
 
         Quagga.onDetected(function(data) {
             document.getElementById(activeField).value = data.codeResult.code;
+            // Bestätigungs-Ton (optional)
+            vibrateMobile();
             stopScanner();
-            // Visuelles Feedback
-            document.getElementById(activeField).style.backgroundColor = "#e6ffed";
         });
     }
 
@@ -93,24 +101,23 @@
         document.getElementById('stop-btn').style.display = 'none';
     }
 
-    function saveToHistory() {
+    function vibrateMobile() {
+        if (navigator.vibrate) navigator.vibrate(100);
+    }
+
+    function saveData() {
         const p = document.getElementById('stellplatz').value;
         const pr = document.getElementById('produkt').value;
         const nr = document.getElementById('artikelnr').value;
-
-        if(!p || !pr) { alert("Bitte erst scannen!"); return; }
-
         const entry = document.createElement('div');
-        entry.className = 'entry';
-        entry.innerHTML = `<strong>${new Date().toLocaleTimeString()}:</strong> Platz: ${p} | Prod: ${pr} | ArtNr: ${nr}`;
+        entry.style.padding = "5px";
+        entry.style.borderBottom = "1px solid #eee";
+        entry.innerHTML = `Platz: ${p} | Prod: ${pr} | Nr: ${nr}`;
         document.getElementById('history').prepend(entry);
-
-        // Felder leeren für nächsten Scan
+        // Reset Produkt & Nr
         document.getElementById('produkt').value = "";
         document.getElementById('artikelnr').value = "";
-        document.getElementById('produkt').style.backgroundColor = "white";
     }
 </script>
-
 </body>
 </html>
